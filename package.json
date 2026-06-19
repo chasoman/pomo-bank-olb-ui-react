@@ -1,0 +1,22 @@
+{
+  "name": "pomo-bank-olb-ui-react",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Native npm Workspaces Monorepo for Federated PWA Banking Platform",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "clean": "rimraf apps/*/dist apps/*/node_modules node_modules package-lock.json",
+    "start:shell": "npm run start -w apps/shell",
+    "start:auth": "npm run start -w apps/auth",
+    "start:shared": "npm run start -w apps/shared-core",
+    "start:homepage": "npm run start -w apps/homepage",
+    "start:all": "concurrently --kill-others \"npm run start:shell\" \"npm run start:auth\" \"npm run start:shared\" \"npm run start:homepage\"",
+    "build:all": "npm run build --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "rimraf": "^5.0.7"
+  }
+}

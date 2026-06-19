@@ -1,0 +1,13 @@
+.login-page-container { display: flex; justify-content: center; align-items: center; min-height: 90vh; font-family: sans-serif; }
+.login-card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; border: 1px solid #e2e8f0; }
+.login-header { text-align: center; margin-bottom: 24px; }
+.bank-logo-placeholder { font-size: 24px; font-weight: 800; color: #0c4a6e; margin-bottom: 8px; }
+.login-error-toast { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+.login-form { display: flex; flex-direction: column; gap: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 14px; font-weight: 600; }
+.form-group input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px; }
+.button-group { display: flex; gap: 12px; margin-top: 8px; }
+.btn { flex: 1; padding: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; border: none; }
+.btn-primary { background: #0c4a6e; color: white; }
+.btn-secondary { background: #f1f5f9; color: #475569; }
