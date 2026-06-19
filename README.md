@@ -1179,3 +1179,16 @@ jquery-3.1.1.min.js:2 Uncaught ReferenceError: showOneChild is not defined
     at j (jquery-3.1.1.min.js:2:29948)
     at k (jquery-3.1.1.min.js:2:30262)
 ```
+
+## Runs fine on Windows 11
+The exact same code runs fine on local Windows 11.
+Refer screen shots of the demo app - 
+
+Login Screen:
+![Login Screen](images/PomoBank_Demo_Login.png)
+
+Homepage Screen:
+![Homepage Screen](images/PomoBank_Demo_Homepage001.png)
+
+Notifications Dropdown:
+![Notifications Dropdown](images/PomoBank_Demo_Notifications.png)
