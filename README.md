@@ -1161,3 +1161,21 @@ npm run start:all
 ```
 
 Webpack will now find the target templates, compile successfully, and your unified app will load seamlessly on `http://localhost:3000`.
+
+
+## Error running on GitHub Workspace
+This configuration did not work on GitHub workspaces because it was giving the following module not found errors - 
+```bash
+ShowOneChild.js:18 Uncaught ReferenceError: ActionableCoachmark is not defined
+    at ShowOneChild.js:18:27
+main.js:1  Failed to load resource: net::ERR_CONNECTION_REFUSED
+jquery-3.1.1.min.js:2 jQuery.Deferred exception: showOneChild is not defined ReferenceError: showOneChild is not defined
+    at HTMLDocument.<anonymous> (chrome-extension://elhekieabhbkpmcefcoobjddigjcaadp/content_scripts/content-script-idle.js:18:43)
+    at j (chrome-extension://elhekieabhbkpmcefcoobjddigjcaadp/libs/jquery-3.1.1.min.js:2:29948)
+    at k (chrome-extension://elhekieabhbkpmcefcoobjddigjcaadp/libs/jquery-3.1.1.min.js:2:30262) undefined
+r.Deferred.exceptionHook @ jquery-3.1.1.min.js:2
+jquery-3.1.1.min.js:2 Uncaught ReferenceError: showOneChild is not defined
+    at HTMLDocument.<anonymous> (content-script-idle.js:18:43)
+    at j (jquery-3.1.1.min.js:2:29948)
+    at k (jquery-3.1.1.min.js:2:30262)
+```
