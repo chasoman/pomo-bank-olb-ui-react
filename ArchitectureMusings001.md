@@ -133,3 +133,171 @@ graph TD
 * **PWA Cache Control Strategy:** Set the cache header of `remoteEntry.js` to `Cache-Control: no-store, no-cache, must-revalidate`. This forces the client browser to immediately pull the newest remote entry configuration whenever a microfrontend deployment takes place. The associated application chunks can be hashed and cached permanently (`Cache-Control: max-age=31536000`).
 * **Resiliency on Data Ingestion:** If AWS DMS or Amazon MSK experiences a localized connection breakdown to the on-premise environment, the cloud architecture defaults back to read-through behavior on the Spring Boot Microservices, querying directly through an **AWS Direct Connect** or site-to-site VPN to prevent data rendering gaps on the customer dashboard.
 * **Blast Radius Isolation:** Deploy each remote microfrontend with its own isolated CI/CD pipeline. When an update is deployed to S3, a focused invalidate command is targeted directly to that subdirectory on CloudFront (`aws cloudfront create-invalidation --paths "/mfe-profile/*"`), maintaining complete uptime for alternative operational remotes.
+
+---
+---
+
+To transition this cloud-scale architecture to a local development environment on an Ubuntu machine using **Podman**, we need to replace AWS managed services with open-source equivalents.
+
+Since Podman runs rootless by default, we will organize the services using a multi-container setup via `podman-compose` or `podman play kube`, leveraging a shared local network for secure container-to-container communication.
+
+---
+
+## 1. Local Architecture Mapping (AWS to Podman)
+
+To mirror the production behavior on your laptop, the AWS services map to the following local open-source containers:
+
+| AWS Component | Local Podman Equivalent | Purpose in Local Dev |
+| --- | --- | --- |
+| **CloudFront / WAF / API Gateway** | **Nginx / Envoy** | Acts as the reverse proxy, manages routing for local MFEs, handles SSL termination, and simulates cross-origin limits. |
+| **S3 (Static Assets)** | **Nginx Local Directory or MinIO** | Serves the compiled React host shell and federated remote assets (`remoteEntry.js`). |
+| **Spring Boot BFF & Microservices** | **Java Spring Boot Containers** | Packaged as local container images running in the same Podman network. |
+| **Amazon Cognito** | **Keycloak** | Open-source Identity Provider to test full OAuth2/OIDC code grants and HttpOnly cookie generation. |
+| **Amazon ElastiCache (Redis)** | **Redis OSS Image** | Local key-value store for dashboard hydration testing. |
+| **Amazon MSK & AWS DMS** | **Redpanda (or Kafka) + Debezium** | Simulates Change Data Capture (CDC) and the streaming data hydration loop locally. |
+
+---
+
+## 2. Local Architecture Topology Diagram
+
+This diagram visualizes how the components interact locally inside your Ubuntu Podman environment.
+
+```mermaid
+graph TD
+    %% Styling
+    classDef hostOS fill:#f5f5f5,stroke:#333,stroke-width:2px;
+    classDef podmanNet fill:#892CA0,stroke:#fff,stroke-width:1px,color:#fff;
+    classDef dataPlatform fill:#1F618D,stroke:#fff,stroke-width:1px,color:#fff;
+
+    subgraph Laptop ["Ubuntu Host Machine"]
+        Browser[Browser: localhost:8080]
+        
+        subgraph PodmanNet ["Podman Virtual Bridge Network (dnsname enabled)"]
+            
+            %% Gateway & Static Content
+            Nginx[Nginx Reverse Proxy / Gateway]
+            MFE_Static[Nginx Static Server: /var/www/mfe]
+            
+            %% Auth
+            Keycloak[Keycloak Container: OIDC IdP]
+            
+            %% Runtime Applications
+            BFF[Spring Boot BFF Container]
+            MS_Accounts[Spring Boot Accounts Microservice]
+            
+            %% Data Platform
+            LocalRedis[(Local Redis Container)]
+            Redpanda[Redpanda / Local Kafka Container]
+            MockOnPrem[(Mock On-Prem PostgreSQL DB)]
+            Debezium[Debezium CDC Container]
+        end
+    end
+    class Laptop hostOS;
+    class PodmanNet podmanNet;
+    class LocalRedis,Redpanda,Debezium dataPlatform;
+
+    %% Local Traffic Flow
+    Browser ---->|1. Access App / APIs via port 8080| Nginx
+    Nginx -->|Route / | MFE_Static
+    Nginx -->|Route /api/* | BFF
+    Nginx -->|Route /auth/* | Keycloak
+    
+    %% Internal Token Flow
+    BFF <-->|2. Authorization Code Exchange| Keycloak
+    BFF -->|3. Read Cached Dashboard| LocalRedis
+    BFF -->|4. Propagate JWT Bearer Token| MS_Accounts
+    
+    %% Internal Streaming Hydration Loop
+    MockOnPrem -->|5. Write / Update Account| Debezium
+    Debezium -->|6. Stream Change Event| Redpanda
+    Redpanda -->|7. Simple Consumer App updates Cache| LocalRedis
+
+```
+
+---
+
+## 3. Podman Local Implementation Details
+
+### A. Configuring Rootless Podman Networking
+
+By default, rootless Podman containers cannot communicate with each other using default container IDs unless they share a user-defined network. Ensure you have the `podman-plugins` (or `containernetworking-plugins`) package installed on Ubuntu so that container-to-container DNS resolution works.
+
+```bash
+# Create a dedicated network for your local banking cluster
+podman network create banking-net
+
+```
+
+### B. Local `podman-compose.yml` Structure
+
+Below is a foundational structure to spin up the local environment, ensuring that the Spring Boot applications, Keycloak, and Redis share the same local network context.
+
+```yaml
+version: '3.8'
+
+networks:
+  banking-net:
+    external: true
+
+services:
+  # Local Security / IdP
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    args: ["start-dev"]
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_HEALTH_ENABLED=true
+    ports:
+      - "8081:8080"
+    networks:
+      - banking-net
+
+  # Local Near-Real-Time Hydration Data Cache
+  local-cache:
+    image: docker.io/library/redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - banking-net
+
+  # Local Edge / Web Server simulating CloudFront & API Gateway
+  local-gateway:
+    image: docker.io/library/nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./dist:/var/www/mfe:ro # Contains your Host and Federated Remote built JS files
+    networks:
+      - banking-net
+    depends_on:
+      - bff
+      - keycloak
+
+  # Spring Boot Backend-For-Frontend (BFF)
+  bff:
+    image: localhost/spring-boot-bff:latest # Built locally via 'podman build'
+    environment:
+      - SPRING_DATA_REDIS_HOST=local-cache
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://keycloak:8080/realms/banking
+    networks:
+      - banking-net
+    depends_on:
+      - local-cache
+      - keycloak
+
+```
+
+### C. Simulating the Token Handler Flow Locally
+
+1. **Nginx Configuration (`nginx.conf`):** Configure Nginx to proxy `/api/` requests straight to the `bff` container, and `/auth/` requests straight to `keycloak`.
+2. **Local Hosts Mapping:** To avoid cross-domain cookie issues when testing the **HttpOnly Cookie pattern** locally, map a dummy domain in your Ubuntu `/etc/hosts` file:
+```text
+127.0.0.1   banking.local
+
+```
+
+
+You can then access your local environment via `http://banking.local:8080`. This allows your local React host app and the Spring Boot BFF container to share the `banking.local` domain, satisfying `SameSite=Strict` cookie restrictions perfectly during development.
+3. **Token Verification:** The local core microservice (e.g., `MS_Accounts`) validates incoming requests by fetching the JWT public signing keys from `http://keycloak:8080/realms/banking/protocol/openid-connect/certs` over the internal Podman bridge network.
