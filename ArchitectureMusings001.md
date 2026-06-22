@@ -301,3 +301,122 @@ services:
 
 You can then access your local environment via `http://banking.local:8080`. This allows your local React host app and the Spring Boot BFF container to share the `banking.local` domain, satisfying `SameSite=Strict` cookie restrictions perfectly during development.
 3. **Token Verification:** The local core microservice (e.g., `MS_Accounts`) validates incoming requests by fetching the JWT public signing keys from `http://keycloak:8080/realms/banking/protocol/openid-connect/certs` over the internal Podman bridge network.
+
+---
+---
+Yes, Redis is an excellent fit for this specific banking use case, but it should be used as a speed layer (cache) rather than the permanent golden record. [1] 
+For a bank with 600,000 customers, the total data size for names, account numbers, nicknames, and balances is actually quite small (under 3 to 5 gigabytes of total RAM). Because Apache Kafka and [Change Data Capture (CDC)](https://www.geeksforgeeks.org/system-design/change-data-capture-cdc/) will be constantly streaming live balance updates from the mainframes, [Redis](https://redis.io/) can ingest those updates instantly. This allows mobile banking apps and websites to show customers their live balances in under a millisecond without crashing the mainframes.
+------------------------------
+
+## Why Redis is a Great Fit here
+
+* 
+* Sub-Millisecond Updates: When a customer swipes their debit card, the mainframe triggers a CDC event through Kafka. Redis can update that specific customer's balance instantly.
+* Low Memory Footprint: 600,000 customers with a few accounts each will easily fit into a small, inexpensive Redis cluster.
+* Native Data Structures: You can use Redis Hashes to store each account (account_number, nickname, type, balance) linked to a Redis Set of the customer's ID. [2, 3] 
+* 
+
+## The Catch: Why You Need a Twin Platform
+While Redis handles the fast live updates perfectly, it is not a good fit for the permanent storage of a bank. It is expensive for long-term historical data, and it is difficult to run complex audits or monthly financial reports on it. [4, 5, 6] 
+------------------------------
+## The Most Appropriate Cloud Alternatives
+To build a secure, scalable banking system, companies use a hybrid approach. They use Redis for the fast live screen views, alongside one of the following permanent cloud platforms: [7, 8] 
+
+| Cloud Provider [9, 10, 11, 12, 13] | NoSQL Database (For the Live App) | Data Lakehouse (For Analytics & History) |
+|---|---|---|
+| AWS | Amazon DynamoDB | Amazon S3 + Databricks / AWS Glue |
+| Microsoft Azure | Azure Cosmos DB[](https://azure.microsoft.com/en-us/products/cosmos-db/) | Azure Data Lake + Databricks |
+| Google Cloud | Google Cloud Bigtable[](https://cloud.google.com/bigtable) / Firestore | Google Cloud Storage + BigQuery / Databricks |
+
+## 1. The Operational Choice: Managed Cloud NoSQL
+If you choose not to use Redis, tools like Amazon DynamoDB or [Azure Cosmos DB](https://azure.microsoft.com/en-us/products/cosmos-db) are the best alternatives. [14] 
+
+* 
+* Pros: They can easily handle the rapid streaming updates from Kafka, scale automatically, and store data safely on physical disks instead of expensive RAM.
+* Cons: They are slightly slower than Redis (single-digit milliseconds vs. sub-milliseconds). [15, 16] 
+* 
+
+## 2. The Analytical Choice: Cloud Data Lakehouse (Databricks) [17] 
+Your Kafka stream should send a second copy of the data to a platform like Databricks. [18] 
+
+* 
+* Pros: It provides a permanent, highly secure record of every balance change over time. It is perfect for data scientists running fraud detection or analysts creating monthly financial compliance reports.
+* Cons: It is not designed to serve instant balance updates directly to a customer-facing mobile app. [19] 
+* 
+
+------------------------------
+To help design the best architecture, tell me:
+
+* 
+* Which cloud provider (AWS, [Azure](https://www.techtarget.com/searchcloudcomputing/definition/Windows-Azure), or [Google Cloud](https://cloud.google.com/)) is your bank using?
+* Will this data platform also need to serve historical data and analytics, or just live app views? [20] 
+* 
+
+
+[1] [https://medium.com](https://medium.com/@janinduravishka1999/how-redis-caching-supercharged-database-reads-in-spring-boot-cqrs-architecture-be1bfc77209a)
+[2] [https://ak67373.medium.com](https://ak67373.medium.com/redis-a-high-speed-database-cache-and-message-broker-cb9fde351752)
+[3] [https://www.acte.in](https://www.acte.in/redis-interview-questions-and-answers)
+[4] [https://news.ycombinator.com](https://news.ycombinator.com/item?id=37552085)
+[5] [https://redis.io](https://redis.io/blog/redis-data-integration-your-fast-lane-from-legacy-systems-to-the-ai-era-on-aws/)
+[6] [https://www.chegg.com](https://www.chegg.com/homework-help/questions-and-answers/imagine-scenario-rapidly-growing-e-commerce-company-crossroads-data-management-strategy-de-q131933102)
+[7] [https://sdk.finance](https://sdk.finance/blog/hybrid-cloud-for-banking/)
+[8] [https://fptsoftware.com](https://fptsoftware.com/resource-center/blogs/cloud-banking-how-cloud-computing-is-transforming-the-bfsi-industry)
+[9] [https://medium.com](https://medium.com/amsterdam-standard/dynamodb-to-use-or-not-to-use-7ccf44aea659)
+[10] [https://quizlet.com](https://quizlet.com/473142351/chapter-2-1-50-domain-2define-performant-architectures-flash-cards/)
+[11] [https://medium.com](https://medium.com/google-cloud/building-scalable-mobile-banking-solutions-on-gcp-8dad44ecb4a1)
+[12] [https://www.linkedin.com](https://www.linkedin.com/pulse/data-bricks-certified-engineer-associate-dumps-ankit-yadav--3xs6f)
+[13] [https://www.generativevalue.com](https://www.generativevalue.com/p/a-primer-on-the-data-lakehouse)
+[14] [https://www.examtopics.com](https://www.examtopics.com/discussions/amazon/view/53854-exam-aws-certified-solutions-architect-associate-saa-c02/)
+[15] [https://blogs.oracle.com](https://blogs.oracle.com/nosql/speed-matters-why-choosing-the-right-database-is-critical-for-best-customer-experience)
+[16] [https://shiftasia.com](https://shiftasia.com/community/understanding-nosql-advantages-and-real-world-use-cases/)
+[17] [https://mantelgroup.com.au](https://mantelgroup.com.au/what-is-databricks-and-whats-it-used-for/)
+[18] [https://medium.com](https://medium.com/@24chynoweth/data-streaming-at-scale-databricks-and-snowflake-ca65a2401649)
+[19] [https://www.databricks.com](https://www.databricks.com/customers/hsbc)
+[20] [https://www.altisconsulting.com](https://www.altisconsulting.com/data-and-analytics/consulting-services/data-platforms)
+
+
+---
+---
+
+Adding this supplementary data changes your needs. This new data includes text, dates, images, and expiry times. Some of it needs to be searched quickly, and some of it needs to disappear automatically when a sale or alert ends.
+Because of this, Redis goes from being a good fit to being the perfect fit for the live app layer. However, you will need to structure it carefully.
+------------------------------
+## How Redis Handles This Supplementary Data
+Redis has built-in features made specifically for things like alerts, promotions, and notifications:
+
+* Automatic Expiration (TTL): You can set a "Time to Live" (TTL) on an alert or promotion. For example, if a marketing campaign ends on Friday, you can tell Redis to delete it automatically on Friday night. This keeps your database clean without any extra coding. [1, 2] 
+* Pub/Sub (Publish/Subscribe): If a mainframe trigger sends a fraud warning to Kafka, Redis can instantly push that critical alert to the customer's phone in real-time.
+* Fast Text Search: By using Redis Search, your app can quickly find all active promotions that match a specific customer type (like "Premium Account deals").
+
+------------------------------
+## The New Architecture Layout
+Since you are adding more data types, you should organize your Redis platform into three distinct sections:
+
+[ Kafka Stream ] ───► [ REDIS MEMORY PLATFORM ]
+                           │
+                           ├──► 1. Customer & Balance Layer (Fast updates)
+                           ├──► 2. Alert & Notification Layer (Auto-expires via TTL)
+                           └──► 3. Marketing & Promotion Layer (Indexed for fast search)
+
+
+   1. Customer & Balance Layer: Still stores the live account numbers and balances using Redis Hashes.
+   2. Alert & Notification Layer: Stores temporary items like "Low Balance Warning" or "New Login Detected." These use a TTL so they disappear after the customer reads them or after a few days. [3] 
+   3. Marketing & Promotion Layer: Stores active ads and product discounts. These are indexed so the app can show relevant deals the moment a user logs in.
+
+------------------------------
+## When to Look at Cloud Alternatives Instead
+While Redis handles this beautifully at 600,000 customers, you might want to look at a cloud alternative like Amazon DynamoDB or Azure Cosmos DB if:
+
+* Rich Asset Storage: Your marketing promotions include large images or video banners. Redis should only store the text and links to those files, not the heavy images themselves.
+* Complex Targeting: You want to run massive data science models to figure out which customer gets which ad. For that, you would need to feed this data back into an analytics platform like [Databricks](https://www.databricks.com/) to do the heavy lifting, then push the results back to Redis.
+
+To help tailor this setup, let me know:
+
+* Do these promotions include large files like images, or just text and links?
+* How often do the marketing campaigns and alerts change or get updated?
+
+
+[1] [https://umnico.com](https://umnico.com/blog/marketing-messages-lite-api/)
+[2] [https://www.heltar.com](https://www.heltar.com/blogs/what-is-metas-mm-lite-api)
+[3] [https://danlevy.net](https://danlevy.net/quiz-in-the-aws-cloud/)
+
